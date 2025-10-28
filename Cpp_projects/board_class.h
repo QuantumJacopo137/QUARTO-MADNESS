@@ -8,6 +8,8 @@
 #include <numeric> // for std::iota
 #include <vector>
 #include <cstdio>
+#include <bitset>
+#include <random>
 
 class Board {
 public:
@@ -49,6 +51,88 @@ public:
     }
 
     const Matrix& board_matrix() const { return board_matrix_; }
+
+     // read a 4x4 matrix of 3-char strings from a file in the current working directory
+    // file format: 16 whitespace-separated tokens (row-major) or 4 tokens per line
+    void read_from_file(const std::string &filename) {
+        std::FILE *f = std::fopen(filename.c_str(), "r");
+        if (!f) throw std::runtime_error("Failed to open file: " + filename);
+
+        std::vector<std::vector<std::string>> file_matrix_(4, std::vector<std::string>(4));
+        for (int r = 0; r < 4; ++r) {
+            for (int c = 0; c < 4; ++c) {
+                char buffer[4]; // 3 chars + null terminator
+                if (std::fscanf(f, "%3s", buffer) != 1) {
+                    std::fclose(f);
+                    throw std::runtime_error("Failed to read token from file: " + filename);
+                }
+                file_matrix_[r][c] = std::string(buffer);
+            }
+        }
+        
+        std::fclose(f);
+
+
+        
+
+        std::unordered_map<std::string, int> dict;
+        dict["Bsh"] = 0; // 0000 -> Black, Tall, Square, Hollow
+        dict["Bsf"] = 1; // 0001 -> Black, Tall, Square, Filled
+        dict["Bch"] = 2; // 0010 -> Black, Tall, Circle, Hollow
+        dict["Bcf"] = 3; // 0011 -> Black, Tall, Circle, Filled
+        dict["bsh"] = 4; // 0100 -> Black, Short, Square, Hollow
+        dict["bsf"] = 5; // 0101 -> Black, Short, Square, Filled
+        dict["bch"] = 6; // 0110 -> Black, Short, Circle, Hollow
+        dict["bcf"] = 7; // 0111 -> Black, Short, Circle, Filled
+        dict["Wsh"] = 8; // 1000 -> White, Tall, Square, Hollow
+        dict["Wsf"] = 9; // 1001 -> White, Tall, Square, Filled
+        dict["Wch"] = 10; // 1010 -> White, Tall, Circle, Hollow
+        dict["Wcf"] = 11; // 1011 -> White, Tall, Circle, Filled
+        dict["wsh"] = 12; // 1100 -> White, Short, Square, Hollow
+        dict["wsf"] = 13; // 1101 -> White, Short, Square, Filled
+        dict["wch"] = 14; // 1110 -> White, Short, Circle, Hollow
+        dict["wcf"] = 15; // 1111 -> White, Short, Circle, Filled
+
+        std::unordered_map<int, int> mat_index_to_boardmat_index;
+        mat_index_to_boardmat_index[0] = -2;
+        mat_index_to_boardmat_index[1] = -1;
+        mat_index_to_boardmat_index[2] = 1;
+        mat_index_to_boardmat_index[3] = 2;
+
+
+        printf("File matrix loaded from %s:\n", filename.c_str());
+
+        this->reset(); // reset the board before loading new data
+
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) {
+                std::cout << file_matrix_[row][col] << '\t';
+                // convert string to corresponding integer value
+                if (file_matrix_[row][col] == "0") {
+                    continue; // skip empty cells
+                }
+
+                if (dict.find(file_matrix_[row][col]) != dict.end()) {
+                    // set the corresponding cell in the board matrix
+                    //std::cout << "checking piece " << file_matrix_[row][col] << " ... " << '\n';
+                    board_matrix_[dict[file_matrix_[row][col]]][0] = mat_index_to_boardmat_index[row];
+                    board_matrix_[dict[file_matrix_[row][col]]][1] = mat_index_to_boardmat_index[col];
+                    //std::cout << "Placed piece " << dict[file_matrix_[row][col]] << " at (" << mat_index_to_boardmat_index[row] << ", " << mat_index_to_boardmat_index[col] << ")\n";
+                    remove_piece_from_available(dict[file_matrix_[row][col]]);
+                    available_positions_.erase(available_positions_.begin() + dict[file_matrix_[row][col]]);
+                }
+                else {
+                    throw std::runtime_error("Invalid token in file: " + file_matrix_[row][col]);
+                }
+            }
+            std::cout << '\n';
+
+            winning_status_ = false; // reset winning status when loading from file
+        }
+
+    }
+
+
 
     bool winning_status() const { return winning_status_; }
     void setWinningStatus(bool s) { winning_status_ = s; }
@@ -105,18 +189,29 @@ public:
         remove_piece_from_available(piece);
     }
 
+
+
     void add_one_random(){
         if (available_pieces_.empty()) {
             std::cerr << "Error: No available pieces to add." << std::endl;
             exit(EXIT_FAILURE);
         }
-
+    
         // select a random piece from available pieces
-        int random_index = rand() % available_pieces_.size();
-        int piece = available_pieces_[random_index];
+        //int random_index = rand() % available_pieces_.size();
+        std::random_device rd;  // Hardware random number generator
+        std::mt19937 gen(rd()); // Mersenne Twister generator
+        std::uniform_int_distribution<> dis(0, available_pieces_.size() - 1);
+        int piece = available_pieces_[dis(gen)];
 
         // generate a second random index for position
-        int pos_index = rand() % available_positions_.size();
+        std::uniform_int_distribution<> pos_dis(0, available_positions_.size() - 1);
+        int pos_index = pos_dis(gen);
+
+        // printing for debugging
+        //printf("Adding piece %d at random position index %d\n", piece, pos_index);
+        //printf("Position coordinates: (%d, %d)\n", available_positions_[pos_index][0], available_positions_[pos_index][1]);
+
         int x = available_positions_[pos_index][0];
         int y = available_positions_[pos_index][1];
 
@@ -130,6 +225,8 @@ public:
         
     }
 
+
+    // CHECK THIS
     void remove_one(int piece) {
         // validate row index (will throw if out of range)
         validateIndices(piece, 0);
@@ -153,24 +250,214 @@ public:
         // Placeholder for win condition checking logic
         // Set winning_status_ = true if a win condition is met
 
+        // Outline:
+        // 1. Check rows, columns and diagonals: if they have a single empty slot skip to the next one
+        // 2. If no empty slots, take the 4 numbers in the row/column/diagonal and convert them in 4 4-bit numbers
+        // 3. Perform bitwise XOR across the 4 numbers; if the result is different than 15 (1111 in binary), set winning_status_ = true and return
 
-        std::array<std::array<std::array<bool, 4>, 4>, 4> state0; // all false-initialized
-        std::array<std::array<std::array<bool, 4>, 4>, 4> state1; // all false-initialized
-        std::array<bool, 4> PIECE_bianary;
-        for (int r = 0; r < Rows; ++r) {
-            int x = board_matrix_[r][0];
-            int y = board_matrix_[r][1];
-            if (x != 0 || y != 0) {
-                // represent r, the piece index, in binary form as 4 bits
-                for (int b = 0; b < 4; ++b) {
-                    PIECE_bianary[b] = (r >> (3 - b)) & 1;
+      
+
+        std::vector<int> possible_win_rows={-2,-1,1,+2};
+        std::vector<int> possible_win_cols={-2,-1,1,+2};
+        std::vector<int> possible_win_diags={0,1};
+        for (int i=0; i<available_positions_.size(); ++i) {
+            int x = available_positions_[i][0];
+            int y = available_positions_[i][1];
+            //printf("Checking available position (%d, %d)\n", x, y);
+            if (x == y) {
+                auto it = std::find(possible_win_diags.begin(), possible_win_diags.end(), 1);
+                if (it != possible_win_diags.end()) {
+                    possible_win_diags.erase(it);
+                    //printf("Removed anti diagonal from possible win\n");
+                    
                 }
-                
+            }
 
+            if (x==-y){
+                auto it = std::find(possible_win_diags.begin(), possible_win_diags.end(), 0);
+                if (it != possible_win_diags.end()) {
+                    possible_win_diags.erase(it);
+                    //printf("Removed main diagonal from possible wins\n");
+
+                }
+            }
+            auto it = std::find(possible_win_rows.begin(), possible_win_rows.end(), x);
+            if (it != possible_win_rows.end()) {
+                possible_win_rows.erase(it);
+                //printf("Removed row %d from possible wins\n", x);
+            }
+
+            it = std::find(possible_win_cols.begin(), possible_win_cols.end(), y);
+            if (it != possible_win_cols.end()) {
+                possible_win_cols.erase(it);
+                //printf("Removed col %d from possible wins\n", y);
             }
         }
 
 
+        //std::cout << "Possible winning rows:";
+        //for (int r : possible_win_rows) std::cout << ' ' << r;
+        //std::cout << '\n';
+
+        //std::cout << "Possible winning cols:";
+        //for (int c : possible_win_cols) std::cout << ' ' << c;
+        //std::cout << '\n';
+
+        //std::cout << "Possible winning diags:";
+        //for (int d : possible_win_diags) std::cout << ' ' << d;
+        //std::cout << '\n';
+
+        // Now we'll have a list of all the possible rows that we can check for a win
+        check_row_win(possible_win_rows);
+        if (winning_status_) return;
+        check_col_win(possible_win_cols);
+        if (winning_status_) return;
+        check_diag_win(possible_win_diags);
+
+    }
+
+
+    void check_row_win(std::vector<int> &possible_win_rows) {
+        // Now we'll check each possible winning row
+        std::vector<std::bitset<4>> pieces_in_row;
+        for (int r : possible_win_rows) {
+            pieces_in_row.clear();
+            // collect piece bitsets for all pieces placed in row r
+            for (int idx = 0; idx < Rows; ++idx) {
+                if (board_matrix_[idx][0] == r && board_matrix_[idx][1] != 0) {
+                    pieces_in_row.push_back(std::bitset<4>(idx));
+                    printf("Piece %2d found in: %d, %d\n", idx, r, board_matrix_[idx][1]);
+                }
+            }
+
+            // need exactly 4 pieces to evaluate a win
+            if (pieces_in_row.size() != 4){
+                std::cerr << "Error: Expected 4 pieces in row " << r << ", found " << pieces_in_row.size() << std::endl;
+                exit(EXIT_FAILURE);
+            }
+
+
+
+            bool tmp = false;
+            
+            std::cout << pieces_in_row[0] << '\n' << pieces_in_row[1] << '\n' << pieces_in_row[2] << '\n' << pieces_in_row[3] << '\n' <<'\n';
+
+
+            for (int bit = 0; bit < 4; ++bit) {
+                //std::cout << "Checking bit " << bit << " for row " << r << std::endl;
+                tmp = pieces_in_row[0][bit] ^ pieces_in_row[1][bit];
+                //std::cout <<  pieces_in_row[0][bit] << " ^ " << pieces_in_row[1][bit] << " = " << tmp << std::endl;
+                if (tmp) continue;;
+                tmp = pieces_in_row[2][bit] ^ pieces_in_row[3][bit];
+                //std::cout <<  pieces_in_row[2][bit] << " ^ " << pieces_in_row[3][bit] << " = " << tmp << std::endl;
+                if (tmp) continue;;
+                tmp = pieces_in_row[0][bit] ^ pieces_in_row[2][bit];
+                //std::cout <<  pieces_in_row[0][bit] << " ^ " << pieces_in_row[2][bit] << " = " << tmp << std::endl;
+                if (tmp) continue;;
+
+                    
+                winning_status_ = true;
+                std::cout << "Winning condition met in row " << r << " on bit " << bit << std::endl;
+                return;
+            }
+        }
+    }
+
+    void check_col_win(std::vector<int> &possible_win_cols) {
+      std::vector<std::bitset<4>> pieces_in_col;
+        for (int c : possible_win_cols) {
+            pieces_in_col.clear();
+            // collect piece bitsets for all pieces placed in col c
+            for (int idx = 0; idx < Rows; ++idx) {
+                if (board_matrix_[idx][1] == c && board_matrix_[idx][0] != 0) {
+                    pieces_in_col.push_back(std::bitset<4>(idx));
+                    printf("Piece %2d found in: %d, %d\n", idx, board_matrix_[idx][0], c);
+                }
+            }
+
+            // need exactly 4 pieces to evaluate a win
+            if (pieces_in_col.size() != 4){
+                std::cerr << "Error: Expected 4 pieces in col " << c << ", found " << pieces_in_col.size() << std::endl;
+                exit(EXIT_FAILURE);
+            }
+
+
+
+            bool tmp = false;
+
+            std::cout << pieces_in_col[0] << '\n' << pieces_in_col[1] << '\n' << pieces_in_col[2] << '\n' << pieces_in_col[3] << '\n' <<'\n';
+
+
+            for (int bit = 0; bit < 4; ++bit) {
+                //std::cout << "Checking bit " << bit << " for row " << r << std::endl;
+                tmp = pieces_in_col[0][bit] ^ pieces_in_col[1][bit];
+                //std::cout <<  pieces_in_col[0][bit] << " ^ " << pieces_in_col[1][bit] << " = " << tmp << std::endl;
+                if (tmp) continue;
+                tmp = pieces_in_col[2][bit] ^ pieces_in_col[3][bit];
+                //std::cout <<  pieces_in_col[2][bit] << " ^ " << pieces_in_col[3][bit] << " = " << tmp << std::endl;
+                if (tmp) continue;
+                tmp = pieces_in_col[0][bit] ^ pieces_in_col[2][bit];
+                //std::cout <<  pieces_in_col[0][bit] << " ^ " << pieces_in_col[2][bit] << " = " << tmp << std::endl;
+                if (tmp) continue;
+
+                    
+                winning_status_ = true;
+                std::cout << "Winning condition met in col " << c << " on bit " << bit << std::endl;
+                return;
+            }
+        }
+    }
+
+    void check_diag_win(std::vector<int> &possible_win_diags) {
+
+        std::vector<std::bitset<4>> pieces_in_diag;
+
+        for (int d : possible_win_diags) {
+            pieces_in_diag.clear();
+
+            // collect piece bitsets for all pieces placed in diagonal d
+            for (int idx = 0; idx < Rows; ++idx) {
+                if (d == 1 && board_matrix_[idx][0] == board_matrix_[idx][1] && board_matrix_[idx][0] != 0) {
+                    pieces_in_diag.push_back(std::bitset<4>(idx));
+                    printf("Piece %2d found in: %d, %d\n", idx, board_matrix_[idx][0], board_matrix_[idx][1]);
+                }
+                else if (d == 0 &&  (board_matrix_[idx][0] == -board_matrix_[idx][1]) && board_matrix_[idx][0] != 0) {
+                    pieces_in_diag.push_back(std::bitset<4>(idx));
+                    printf("Piece %2d found in: %d, %d\n", idx, board_matrix_[idx][0], board_matrix_[idx][1]);
+                }
+            }
+
+            // need exactly 4 pieces to evaluate a win
+            if (pieces_in_diag.size() != 4){
+                std::cerr << "Error: Expected 4 pieces in diag " << d << ", found " << pieces_in_diag.size() << std::endl;
+                exit(EXIT_FAILURE);
+            }
+
+
+
+            bool tmp = false;
+
+            std::cout << pieces_in_diag[0] << '\n' << pieces_in_diag[1] << '\n' << pieces_in_diag[2] << '\n' << pieces_in_diag[3] << '\n' <<'\n';
+
+
+            for (int bit = 0; bit < 4; ++bit) {
+                //std::cout << "Checking bit " << bit << " for row " << r << std::endl;
+                tmp = pieces_in_diag[0][bit] ^ pieces_in_diag[1][bit];
+                //std::cout <<  pieces_in_diag[0][bit] << " ^ " << pieces_in_diag[1][bit] << " = " << tmp << std::endl;
+                if (tmp) continue;;
+                tmp = pieces_in_diag[2][bit] ^ pieces_in_diag[3][bit];
+                //std::cout <<  pieces_in_diag[2][bit] << " ^ " << pieces_in_diag[3][bit] << " = " << tmp << std::endl;
+                if (tmp) continue;;
+                tmp = pieces_in_diag[0][bit] ^ pieces_in_diag[2][bit];
+                //std::cout <<  pieces_in_diag[0][bit] << " ^ " << pieces_in_diag[2][bit] << " = " << tmp << std::endl;
+                if (tmp) continue;;
+
+                    
+                winning_status_ = true;
+                std::cout << "Winning condition met in diag " << d << " on bit " << bit << std::endl;
+                return;
+            }
+        }
     }
 
 
@@ -213,6 +500,7 @@ public:
         os << "------------------" << '\n' <<  '\n';
     }
 
+
     void printAvailablePieces(std::ostream &os = std::cout) const {
         os << "Available pieces: " << '\n';
         os << "------------------" << '\n';
@@ -243,21 +531,60 @@ public:
         printAvailablePositions(os);
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const Board& b) {
-        b.print(os);
-        return os;
+    void print_the_board(){
+
+        std::vector<std::vector<std::string>> display_board(4, std::vector<std::string>(4, "."));
+        
+
+        printf("The board layout is:\n");
+
+        for (int r = 0; r < 16; ++r) {
+            if (board_matrix_[r][0] != 0 && board_matrix_[r][1] != 0) {
+                std::bitset<4> piece_bits(r);
+
+                /* debugging print
+                    printf("Piece %2d at position (%2d, %2d): ", r, board_matrix_[r][0], board_matrix_[r][1]);
+                    std::cout << '\n';
+                */
+                // mapping the -2,-1,1,2 to 0,1,2,3
+                int row = (board_matrix_[r][0] + 2);
+                int col = (board_matrix_[r][1] + 2);
+                row = (row > 2) ? row - 1 : row; // adjust for skipping 0
+                col = (col > 2) ? col - 1 : col; // adjust for skipping 0
+                
+                display_board[row][col] = piece_bits.to_string(); // convert int to string
+                
+            }
+            else {
+               continue;
+            }
+
+
+            
+
+        }
+        for (int i = 3; i >= 0; --i) {
+                for (int j = 0; j < 4; ++j) {
+                    std::cout << display_board[i][j] << '\t';
+                }
+                std::cout << '\n';
+            }
+
     }
 
 private:
-    Matrix board_matrix_;
+    // fixed-size board matrix, the row index is the piece index (0..15), the cols are the x,y positions where the piece is quadranted
+    // using 0 for unplaced pieces, the coordinates for x and y span -2 to +2, skipping 0
+    Matrix board_matrix_; // 16x2 matrix
+    // dynamic list of available positions, is a Nx2 vector of (x,y) pairs
     std::vector<std::array<int, 2>> available_positions_;
-
-    bool winning_status_;
-
-    // dynamic container so it can shrink down to a scalar
+    // dynamic list of available pieces, is a vectors containing the ID of the pieces that are not yet placed
     std::vector<int> available_pieces_;
 
-    static void validateMatrix(const Matrix &m) {
+    // winning status, true if the board is in a winning condition, false otherwise
+    bool winning_status_;
+
+      static void validateMatrix(const Matrix &m) {
         for (const auto &row : m)
             for (int v : row)
                 if (!validValue(v))
