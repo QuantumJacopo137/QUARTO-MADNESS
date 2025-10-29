@@ -25,6 +25,17 @@ public:
         initializeAvailablePositions();
     }
 
+    // copy attributes from another Board instance
+    void copy_from(const Board &other) {
+        // validate incoming matrix before copying
+        validateMatrix(other.board_matrix_);
+        board_matrix_ = other.board_matrix_;
+        available_positions_ = other.available_positions_;
+        available_pieces_ = other.available_pieces_;
+        winning_status_ = other.winning_status_;
+    }
+
+
     // initialize available positions
     void initializeAvailablePositions() {
         // it needs to be (-2,-2) to (+2,+2), skipping the (0,0) position
@@ -94,42 +105,55 @@ public:
         dict["wcf"] = 15; // 1111 -> White, Short, Circle, Filled
 
         std::unordered_map<int, int> mat_index_to_boardmat_index;
-        mat_index_to_boardmat_index[0] = -2;
-        mat_index_to_boardmat_index[1] = -1;
-        mat_index_to_boardmat_index[2] = 1;
-        mat_index_to_boardmat_index[3] = 2;
+        mat_index_to_boardmat_index[0] = +2;
+        mat_index_to_boardmat_index[1] = +1;
+        mat_index_to_boardmat_index[2] = -1;
+        mat_index_to_boardmat_index[3] = -2;
 
 
         printf("File matrix loaded from %s:\n", filename.c_str());
+        
 
-        this->reset(); // reset the board before loading new data
-
-        for (int row = 0; row < 4; ++row) {
-            for (int col = 0; col < 4; ++col) {
-                std::cout << file_matrix_[row][col] << '\t';
-                // convert string to corresponding integer value
-                if (file_matrix_[row][col] == "0") {
-                    continue; // skip empty cells
-                }
-
-                if (dict.find(file_matrix_[row][col]) != dict.end()) {
-                    // set the corresponding cell in the board matrix
-                    //std::cout << "checking piece " << file_matrix_[row][col] << " ... " << '\n';
-                    board_matrix_[dict[file_matrix_[row][col]]][0] = mat_index_to_boardmat_index[row];
-                    board_matrix_[dict[file_matrix_[row][col]]][1] = mat_index_to_boardmat_index[col];
-                    //std::cout << "Placed piece " << dict[file_matrix_[row][col]] << " at (" << mat_index_to_boardmat_index[row] << ", " << mat_index_to_boardmat_index[col] << ")\n";
-                    remove_piece_from_available(dict[file_matrix_[row][col]]);
-                    available_positions_.erase(available_positions_.begin() + dict[file_matrix_[row][col]]);
-                }
-                else {
-                    throw std::runtime_error("Invalid token in file: " + file_matrix_[row][col]);
-                }
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                std::cout << file_matrix_[i][j] << '\t';
             }
             std::cout << '\n';
-
-            winning_status_ = false; // reset winning status when loading from file
         }
+        std::cout << '\n';
 
+
+        this->reset();
+        
+        //this->print_verbose();
+
+
+        std::string piece;
+        int piece_id;
+        int x, y;
+
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                //std::cout << "Processing cell (" << i << ", " << j << "): " << file_matrix_[i][j] << '\n';
+                piece = file_matrix_[i][j]; // Put the string in a variable
+                if (piece == "0") continue; // empty cell
+                piece_id = dict[piece];     // map it to piece ID
+                // Convert matrix indices to board coordinates (0,1,2,3)->(-2,-1,1,2)
+                x = mat_index_to_boardmat_index[i]; 
+                y = mat_index_to_boardmat_index[3-j];
+                //std::cout << "Mapped piece " << piece << " to ID " << piece_id << " at board coords (" << x << ", " << y << ")\n";
+                //this->printAvailablePieces();
+                //this->printAvailablePositions();
+                this->add_one(piece_id, x, y);
+                //std::cout << "Placed piece " << piece << " (ID " << piece_id << ") at (" << x << ", " << y << ")\n";
+            }
+        }
+        
+        winning_status_ = false; // reset winning status when loading from file
+
+        std::cout << "In binary, the board is:\n";
+        this->print_the_board();
+        std::cout << '\n';
     }
 
 
@@ -155,41 +179,57 @@ public:
         winning_status_ = false;
         available_pieces_.resize(Rows);
         std::iota(available_pieces_.begin(), available_pieces_.end(), 0);
+        available_positions_.clear();
+        initializeAvailablePositions();
     }
 
     void add_one(int piece, int x, int y) {
-        // validate row index (will throw if out of range)
+        
+        // First we check that eveything is valid:
+
+        // Validate if the piece id is between 0 and 15
         validateIndices(piece, 0);
 
-        if (piece < 0 || piece >= Rows) {
-            std::cerr << "Error: Piece index " << piece << " out of range." << std::endl;
+        // Check that x and y are board coordinates (-2,-1,1,2)
+         // validate values to be stored
+        if (!validValue(x) || !validValue(y)){
+            std::cerr << "Error: Invalid values (" << x << ", " << y << ") for row " << piece << std::endl;
+            exit(EXIT_FAILURE);
+        }
+        //Check the x,y is an available positions
+        auto pos_it = std::find_if(available_positions_.begin(), available_positions_.end(),
+                                   [x, y](const std::array<int, 2>& pos) { return pos[0] == x && pos[1] == y; });
+        if (pos_it == available_positions_.end()) {
+            std::cerr << "Error: Position (" << x << ", " << y << ") is not available." << std::endl;
             exit(EXIT_FAILURE);
         }
         
-        if (abs(x) > 2 || abs(y) > 2) {
-            std::cerr << "Error: Values (" << x << ", " << y << ") out of allowed range." << std::endl;
-            exit(EXIT_FAILURE);
-        }
         // ensure both columns in the target row are zero
         if (board_matrix_[piece][0] != 0 || board_matrix_[piece][1] != 0){
             std::cerr << "Error: Attempt to overwrite non-zero row " << piece << std::endl;
             exit(EXIT_FAILURE);
         }
 
-        // validate values to be stored
-        if (!validValue(x) || !validValue(y)){
-            std::cerr << "Error: Invalid values (" << x << ", " << y << ") for row " << piece << std::endl;
-            exit(EXIT_FAILURE);
-        }
-
-
+       
+        // NOW THAT EVERYTHING IS FINE, WE PROCEED BY UPDATING THE BOARD MATRIX
         board_matrix_[piece][0] = x;
         board_matrix_[piece][1] = y;
 
+        // THEN WE REMOVE THE USED POSITION FROM AVAILABLE POSITIONS
         remove_piece_from_available(piece);
+        remove_position_from_available(x, y);
     }
 
 
+    void remove_position_from_available(int x, int y) {
+        auto it = std::find_if(available_positions_.begin(), available_positions_.end(),
+                               [x, y](const std::array<int, 2>& pos) { return pos[0] == x && pos[1] == y; });
+        if (it != available_positions_.end()) {
+            available_positions_.erase(it);
+        } else {
+            throw std::invalid_argument("Position not found in available positions");
+        }
+    }
 
     void add_one_random(){
         if (available_pieces_.empty()) {
@@ -198,7 +238,6 @@ public:
         }
     
         // select a random piece from available pieces
-        //int random_index = rand() % available_pieces_.size();
         std::random_device rd;  // Hardware random number generator
         std::mt19937 gen(rd()); // Mersenne Twister generator
         std::uniform_int_distribution<> dis(0, available_pieces_.size() - 1);
@@ -571,6 +610,9 @@ public:
             }
 
     }
+
+
+    int holes_count() const {return available_positions_.size();}
 
 private:
     // fixed-size board matrix, the row index is the piece index (0..15), the cols are the x,y positions where the piece is quadranted
