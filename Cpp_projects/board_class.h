@@ -69,6 +69,14 @@ public:
         return available_positions_.at(index).at(coord);   
     }
 
+    int get_available_piece_id(int index) const {
+        if (index < 0 || index >= available_pieces_.size()){
+            throw std::out_of_range("Available piece index out of range");
+        }
+
+        return available_pieces_.at(index);
+
+    }
 
     int piece_string_to_id(std::string token){
         std::unordered_map<std::string, int> dict;
@@ -89,6 +97,27 @@ public:
         dict["wch"] = 14; // 1110 -> White, Short, Circle, Hollow
         dict["wcf"] = 15; // 1111 -> White, Short, Circle, Filled
         return dict[token];
+    }
+
+    std::string piece_id_to_string(int piece_id){
+        std::unordered_map<int, std::string> dict;
+        dict[0] = "Bsh"; // 0000 -> Black, Tall, Square, Hollow
+        dict[1] = "Bsf"; // 0001 -> Black, Tall, Square, Filled
+        dict[2] = "Bch"; // 0010 -> Black, Tall, Circle, Hollow
+        dict[3] = "Bcf"; // 0011 -> Black, Tall, Circle, Filled
+        dict[4] = "bsh"; // 0100 -> Black, Short, Square, Hollow
+        dict[5] = "bsf"; // 0101 -> Black, Short, Square, Filled
+        dict[6] = "bch"; // 0110 -> Black, Short, Circle, Hollow
+        dict[7] = "bcf"; // 0111 -> Black, Short, Circle, Filled
+        dict[8] = "Wsh"; // 1000 -> White, Tall, Square, Hollow
+        dict[9] = "Wsf"; // 1001 -> White, Tall, Square, Filled
+        dict[10] = "Wch"; // 1010 -> White, Tall, Circle, Hollow
+        dict[11] = "Wcf"; // 1011 -> White, Tall, Circle, Filled
+        dict[12] = "wsh"; // 1100 -> White, Short, Square, Hollow
+        dict[13] = "wsf"; // 1101 -> White, Short, Square, Filled
+        dict[14] = "wch"; // 1110 -> White, Short, Circle, Hollow
+        dict[15] = "wcf"; // 1111 -> White, Short, Circle, Filled
+        return dict[piece_id];
     }
 
     const Matrix& board_matrix() const { return board_matrix_; }
