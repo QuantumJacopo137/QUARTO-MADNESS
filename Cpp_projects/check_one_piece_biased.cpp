@@ -109,6 +109,8 @@ int main(int argc, char* argv[]) {
     
     std::vector<std::vector<double>> Results(4, std::vector<double> (input_board.holes_count()));
 
+
+    // The actual loop for each available hole
     for (int h=0; h < input_board.holes_count(); ++h) {
         x_avail = input_board.get_hole_coordinate(h, 0);
         y_avail = input_board.get_hole_coordinate(h, 1);
@@ -134,31 +136,32 @@ int main(int argc, char* argv[]) {
 
         int win_count = 0;
         int win_count_player = 0;
+        // Monte Carlo simulations starting from the board with the new piece added in the tiral hole
         for (int MC_sim = 0; MC_sim < max_MC_iterations; ++MC_sim) {
-        sim_board.reset();
-        sim_board.copy_from(copy_board);
-        // Here you would implement the Monte Carlo simulation logic
-        // For example, randomly play moves up to max_depth and evaluate the outcome
-   
-        for (int depth = 0; depth < max_depth-1; ++depth) {
-            // Randomly select a piece and position from available one
-            sim_board.add_one_random_biased();
-            sim_board.win_check();
-            games_num[depth+1]++;
-            if (sim_board.winning_status()) {
-                win_depths[depth]++;
-                win_count++;
-                if (depth % 2 == 0) {
-                    win_count_player++;
-                }
-                else {
-                    win_count_player--;
-                }
-                break; // Stop simulation on win
-            }
+            sim_board.reset();
+            sim_board.copy_from(copy_board);
+            // Here you would implement the Monte Carlo simulation logic
+            // For example, randomly play moves up to max_depth and evaluate the outcome
             
+            for (int depth = 0; depth < max_depth-1; ++depth) {
+                // Randomly select a piece and position from available one
+                sim_board.add_one_random_biased();
+                sim_board.win_check();
+                games_num[depth+1]++;
+                if (sim_board.winning_status()) {
+                    win_depths[depth]++;
+                    win_count++;
+                    if (depth % 2 == 0) {
+                        win_count_player--;
+                    }
+                    else {
+                        win_count_player++;
+                    }
+                    break; // Stop simulation on win
+                }
+
+            }
         }
-    }
         Results[0][h] = x_avail;
         Results[1][h] = y_avail;
         Results[2][h] = double(win_count) / double(max_MC_iterations);
